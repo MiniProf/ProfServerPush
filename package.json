@@ -1,0 +1,11 @@
+{
+  "name": "pushserver",
+  "version": "0.0.1",
+  "description": "a http push server for when a db is updated",
+  "main": "index.js",
+  "scripts": {
+    "test": "node ./index.js"
+  },
+  "author": "",
+  "license": "ISC"
+}
