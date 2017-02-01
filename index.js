@@ -7,8 +7,8 @@ var io = new Server(8000);
 
 var dsn = {
   host:'sccug-mini-prof.lancs.ac.uk',
-  user:     "root",
-  password: "root",
+  user:     "events",
+  password: "javascript",
   includeEvents: ['tablemap', 'writerows', 'updaterows', 'deleterows']
 };
 try{
@@ -76,4 +76,3 @@ io.on('connection',(socket)=>{
 catch(e){
   console.log(e);
 }
-
