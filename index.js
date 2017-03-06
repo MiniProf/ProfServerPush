@@ -1,50 +1,49 @@
-var MySQLEvents = require('mysql-events');
-
+var ZongJi = require('zongji');
 var io = require('socket.io')();
 // or
 var Server = require('socket.io');
 var io = new Server(8000);
 
-var dsn = {
-  host:'sccug-mini-prof.lancs.ac.uk',
-  user:     "events",
-  password: "javascript",
-  includeEvents: ['tablemap', 'writerows', 'updaterows', 'deleterows']
-};
-try{
-var con = MySQLEvents(dsn);
+var zongji = new ZongJi({
+  host     : 'localhost',
+  user     : 'root',
+  password : 'root',
+   //debug: true
+});
+
 var liveChartsClients = [];
 var sessionValidClients = [];
 var pollLiveClients = [];
 
-var lChartsEvent = con.add('db',(oldRow,newRow,ev)=>{
-  console.log("shit happened");
 
-  liveChartsClients.map((client)=>{
-    if(client && client.value && client.value == fields.SessionID){
-      client.socket.emit(fields);
-    }
-  });
+process.on('SIGINT', function() {
+  console.log('Got SIGINT.');
+  zongji.stop();
+  process.exit();
 });
-var sessionValidEvent = con.add('db.MP_Sessions',(oldRow,newRow,ev)=>{
-  sessionValidClients.map((client)=>{
-    if(client && client.value && client.value == fields.SessionID){
-      client.socket.emit(fields);
+try{
+  zongji.start({
+    includeEvents: ['tablemap', 'writerows', 'updaterows', 'deleterows']
+  });
+  zongji.on('binlog', function(evt) {
+    if(evt.getEventName() == "writerows"){
+      var table = evt.tableMap[evt.tableId].tableName;
+      var row = evt.rows[0];
+      switch (table) {
+        case "MP_Sessions":
+          liveChartsClients.map((client)=>{
+            if(client && client.value && client.value == fields.SessionID){
+              client.socket.emit(fields);
+            }
+          });
+          break;
+        case "MP_Questions":
+          break;
+        default:
+
+      }
     }
   });
-},'Active');
-
-var pollLiveEvent = con.add('db.MP_Questions',(oldRow,newRow,ev)=>{
-  pollLiveClients.map((client)=>{
-    if(client && client.value && client.value == fields.SessionID){
-      client.socket.emit("POLL LIVE");
-    }
-  });
-},'Active');
-con.connect(dsn);
-console.log(con);
-//con.triggers[0].callback();
-
 io.on('connection',(socket)=>{
   socket.on('message',(data)=>{
     var func = data.substring(0,data.indexOf("("));

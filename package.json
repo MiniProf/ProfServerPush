@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "mysql-events": "0.0.10",
-    "socket.io": "^1.7.2"
+    "socket.io": "^1.7.2",
+    "zongji": "^0.4.4"
   }
 }
