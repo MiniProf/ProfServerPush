@@ -2,7 +2,6 @@ var ZongJi = require('zongji');
 var io = require('socket.io')();
 // or
 var Server = require('socket.io');
-var io = new Server(8000);
 
 var zongji = new ZongJi({
   host     : 'localhost',
@@ -11,67 +10,78 @@ var zongji = new ZongJi({
    //debug: true
 });
 
-var liveChartsClients = [];
-var sessionValidClients = [];
-var pollLiveClients = [];
+class PUSHServer {
+  constructor(port){
+    this.server = new Server(port);
+    this.tables = [];
+    this.handlers = [];
 
-
-process.on('SIGINT', function() {
-  console.log('Got SIGINT.');
-  zongji.stop();
-  process.exit();
-});
-try{
-  zongji.start({
-    includeEvents: ['tablemap', 'writerows', 'updaterows', 'deleterows']
-  });
-  zongji.on('binlog', function(evt) {
-    if(evt.getEventName() == "writerows"){
-      var table = evt.tableMap[evt.tableId].tableName;
-      var row = evt.rows[0];
-      switch (table) {
-        case "MP_Sessions":
-          liveChartsClients.map((client)=>{
-            if(client && client.value && client.value == fields.SessionID){
-              client.socket.emit(fields);
-            }
+    process.on('SIGINT', function() {
+      console.log('Got SIGINT.');
+      zongji.stop();
+      process.exit();
+    });
+    zongji.start({
+      includeEvents: ['tablemap', 'writerows', 'updaterows']
+    });
+    zongji.on('binlog',(evt)=>{
+      //stop spamming
+      if(evt.getEventName() == "writerows"){
+        var table = evt.tableMap[evt.tableId].tableName;
+        var row = evt.rows[0];
+        this.handlers[table].func(row,this.handlers[table].clients);
+      }
+    });
+  }
+  addHandler(tableName, func){
+    this.tables.push(tableName);
+    this.handlers[tableName] = {
+      func:func,
+      clients:[]
+    };
+  }
+  addClient(tableName, client){
+    this.handlers[tableName].clients.push(client);
+  }
+  start(){
+    this.server.on('connection',(socket)=>{
+      socket.on('init',(data)=>{
+        console.log(data);
+        if(data.tableName && (this.tables.indexOf(data.tableName)!=-1)){
+          this.addClient(data.tableName,{
+            value:data.match,
+            socket:socket
           });
-          break;
-        case "MP_Questions":
-          break;
-        default:
+          socket.emit('init', 'success');
+        }else{
+          socket.emit('init', 'failed');
+        }
 
+      });
+    });
+  }
+}
+var tables = ["MP_Lecturers","MP_Questions","MP_Reviews","MP_Sessions","MP_TLS", "MP_Tokens"];
+var handler = (row, clients)=>{
+  clients.map((client)=>{
+    if(client.value === undefined)
+      client.socket.emit('update',row);
+    else{
+      for (var data in row) {
+        if(data.indexOf(client.value) != -1){
+          client.socket.emit('update',row);
+          break;
+        }
       }
     }
-  });
-io.on('connection',(socket)=>{
-  socket.on('message',(data)=>{
-    var func = data.substring(0,data.indexOf("("));
-    var funcArg = data.substring(data.indexOf("(")+1,data.length -1);
-    switch (func) {
-      case "liveCharts":
-        liveChartsClients.push({
-          value:funcArg,
-          socket:socket
-        });
-        break;
-      case "sessionValid":
-        sessionValidClients.push({
-            value:funcArg,
-            socket:socket
-          });
-        break;
-      case "pollLive":
-        pollLiveClients.push({
-            value:funcArg,
-            socket:socket
-          });
-          console.log("ADDED CLIENT");
-        break;
-    }
-  });
-});
-}
-catch(e){
-  console.log(e);
-}
+  })
+};
+var PUSHserver = new PUSHServer(8000);
+tables.map(
+  (table)=>{
+    PUSHserver.addHandler(table,handler);
+  }
+);
+
+PUSHserver.start();
+console.log("Server Started on port 8000");
